@@ -186,7 +186,7 @@ def scrape_website(url: str) -> ScrapeResult:
         result.status = "error"
         return result
 
-    soup = BeautifulSoup(resp.text, "html.parser")
+    soup = BeautifulSoup(resp.content, "html.parser")
 
     # Basic meta
     title_tag = soup.find("title")
@@ -222,7 +222,7 @@ def scrape_website(url: str) -> ScrapeResult:
         time.sleep(0.5)
         presp = fetch(purl)
         if presp:
-            psoup = BeautifulSoup(presp.text, "html.parser")
+            psoup = BeautifulSoup(presp.content, "html.parser")
             for tag in psoup(["script", "style"]):
                 tag.decompose()
             ptext = " ".join(psoup.get_text(" ", strip=True).split())[:4000]
@@ -249,7 +249,7 @@ def scrape_reviews(company_name: str) -> list[dict]:
     if not resp:
         return snippets
 
-    soup = BeautifulSoup(resp.text, "html.parser")
+    soup = BeautifulSoup(resp.content, "html.parser")
     # Extract search result snippets
     for div in soup.find_all("div", class_=re.compile(r"(BNeawe|VwiC3b|lEBKkf|s3v9rd)")):
         text = div.get_text(strip=True)

@@ -179,16 +179,30 @@ def compare_competitors():
 
 @app.route("/api/health")
 def health():
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    """Стан сервера і локальної моделі."""
+    from analyzers.llm_client import get_client
+
+    llm = get_client().health()
+    ready = llm["reachable"] and llm["model_available"]
     return jsonify({
         "status": "ok",
-        "api_key_set": bool(api_key),
+        "llm_ready": ready,
+        "llm_model": llm["model"],
+        "llm_base_url": llm["base_url"],
+        "llm_error": llm["error"],
         "active_jobs": len(active_jobs),
     })
 
 
 if __name__ == "__main__":
+    from analyzers.llm_client import get_client
+
     port = int(os.environ.get("PORT", 5000))
     log.info(f"Starting Competitor Analysis Pipeline on http://localhost:{port}")
-    log.info(f"API key: {'✓ set' if os.environ.get('ANTHROPIC_API_KEY') else '✗ NOT SET — export ANTHROPIC_API_KEY=...'}")
+
+    llm_health = get_client().health()
+    if llm_health["model_available"]:
+        log.info(f"LLM: ✓ {llm_health['model']} @ {llm_health['base_url']}")
+    else:
+        log.warning(f"LLM: ✗ {llm_health['error']} ({llm_health['base_url']})")
     app.run(debug=False, host="0.0.0.0", port=port, threaded=True)

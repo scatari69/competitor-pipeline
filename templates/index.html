@@ -403,8 +403,10 @@ async function checkHealth() {
   try {
     const r = await fetch(`${API}/api/health`);
     const d = await r.json();
-    document.getElementById("healthDot").className = "health-dot " + (d.api_key_set ? "ok" : "err");
-    document.getElementById("healthText").textContent = d.api_key_set ? "API key OK" : "API key не встановлено";
+    document.getElementById("healthDot").className = "health-dot " + (d.llm_ready ? "ok" : "err");
+    document.getElementById("healthText").textContent = d.llm_ready
+      ? `модель: ${d.llm_model}`
+      : (d.llm_error || "модель недоступна");
   } catch {
     document.getElementById("healthDot").className = "health-dot err";
     document.getElementById("healthText").textContent = "сервер недоступний";

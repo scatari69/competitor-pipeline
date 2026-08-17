@@ -137,20 +137,24 @@ def run_pipeline(
 
     # ── Stage 4: AI Analysis ───────────────────────────────────────
     status.advance("ai_analysis")
-    progress("Відправляємо дані до Claude AI для аналізу...")
-    progress("Це займає 15-30 секунд...")
+    progress("Передаємо дані локальній моделі...")
+    progress("Аналіз виконується в 5 кроків, це може зайняти кілька хвилин на CPU...")
 
     try:
         analysis = analyze_competitor(
             scraped_data=scrape_result.to_dict(),
             social_data=social_data,
             review_snippets=review_snippets,
+            on_step=lambda msg: progress(msg),
         )
 
         if "error" in analysis:
             progress(f"Помилка аналізу AI: {analysis['error']}", "error")
             status.result = {"scrape": scrape_result.to_dict(), "analysis_error": analysis["error"]}
         else:
+            failed = (analysis.get("_llm") or {}).get("failed_steps") or []
+            if failed:
+                progress(f"Кроки з помилками: {', '.join(failed)} — блоки заповнено дефолтами", "warning")
             progress(f"AI аналіз завершено: загроза — {analysis.get('threat_level', '?')}, "
                      f"сильних сторін — {len(analysis.get('strengths', []))}")
             status.result = {

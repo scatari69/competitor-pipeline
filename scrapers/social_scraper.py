@@ -6,6 +6,7 @@ import requests
 import re
 import logging
 from dataclasses import dataclass, field, asdict
+from typing import Optional
 from bs4 import BeautifulSoup
 
 log = logging.getLogger(__name__)
@@ -35,11 +36,6 @@ class SocialProfile:
     def to_dict(self):
         return asdict(self)
 
-# make Optional available
-from typing import Optional
-SocialProfile.__annotations__["followers"] = Optional[int]
-SocialProfile.__annotations__["posts_count"] = Optional[int]
-
 
 def fetch(url, timeout=12):
     try:
@@ -62,7 +58,7 @@ def scrape_telegram(handle: str) -> SocialProfile:
         profile.error = "cannot fetch"
         return profile
 
-    soup = BeautifulSoup(resp.text, "html.parser")
+    soup = BeautifulSoup(resp.content, "html.parser")
 
     # followers / subscribers
     counter = soup.find(class_=re.compile(r"tgme_page_extra"))
@@ -100,7 +96,7 @@ def scrape_facebook_page(handle: str) -> SocialProfile:
         profile.error = "blocked or requires login"
         return profile
 
-    soup = BeautifulSoup(resp.text, "html.parser")
+    soup = BeautifulSoup(resp.content, "html.parser")
     # Try to get like count / followers from meta
     m = re.search(r"([\d,]+)\s*(?:likes?|people like)", resp.text, re.IGNORECASE)
     if m:
