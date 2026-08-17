@@ -11,8 +11,11 @@ The domain is Ukrainian ISP/telecom competitors: scraper regexes, prompts, LLM o
 ## Commands
 
 ```bash
-pip install -r requirements.txt
+docker compose up -d                 # app + Ollama + model pull; dashboard on :5000
+docker compose logs -f ollama-init   # first run downloads ~3GB, app waits for it
+docker compose logs -f app
 
+pip install -r requirements.txt      # or run locally against a host Ollama
 ollama pull gemma3:4b                # analysis runs on a local model, no API keys
 python server.py                     # dashboard + API on http://localhost:5000 (PORT env overrides)
 
@@ -30,6 +33,12 @@ No linter or build step. Server logs go to stdout and to `pipeline.log` (untrack
 ### LLM configuration
 
 Everything is env-driven, defaults in `analyzers/llm_client.py`: `OLLAMA_BASE_URL`, `LLM_MODEL` (default `gemma3:4b`), `LLM_NUM_CTX`, `LLM_TIMEOUT`, `LLM_TEMPERATURE`, `LLM_RETRIES`. The client is a lazy singleton (`get_client()`), so importing any module without a running Ollama is safe — failures surface as `{"error": ...}` from `analyze_competitor`, not as import errors.
+
+### Docker layout
+
+`docker-compose.yml` runs three services: `ollama` (models in the `ollama-models` volume), a one-shot `ollama-init` that `ollama pull`s `$LLM_MODEL` and exits, and `app`, which waits on `service_completed_successfully` so it never starts before the model exists. Reports bind-mount to `./results` on the host. Tunables come from `.env` (`APP_PORT`, `LLM_MODEL`, `LLM_TIMEOUT`, …); `.env.example` documents them.
+
+The image runs gunicorn with **`--workers 1 --threads 16 --timeout 0`**, and those values are load-bearing: `active_jobs` and the SSE queues live in process memory, so a second worker would route `/api/stream/<job_id>` to a process that has never heard of that job; `--timeout 0` stops gunicorn from killing a worker that is holding an SSE connection open for the minutes an analysis takes.
 
 ### Testing without a model
 
@@ -68,5 +77,4 @@ Three layers, each importable and runnable standalone:
 - Google review scraping targets Google's obfuscated result-div class names (`BNeawe`, `VwiC3b`, …) and is rate-limited/blocked in practice — an empty `review_snippets` list is the normal case, not a bug.
 - Facebook and Instagram return near-empty profiles without authentication; Telegram is the only reliably useful platform.
 - `/api/results/<filename>` and `/api/compare` join user-supplied filenames onto `RESULTS_DIR` without validation.
-- The dashboard hardcodes `const API = "http://localhost:5000"`, so it only works when served on that port despite `PORT` being configurable.
 - Scrapers pass `resp.content` (not `resp.text`) to BeautifulSoup so charset comes from the HTML meta tag. Sites that omit charset from the `Content-Type` header decode as ISO-8859-1 otherwise, which silently mangles Cyrillic and makes the `грн` price patterns miss everything.

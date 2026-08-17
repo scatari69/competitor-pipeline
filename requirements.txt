@@ -3,5 +3,8 @@ flask-cors>=4.0.0
 requests>=2.31.0
 beautifulsoup4>=4.12.0
 
+# WSGI-сервер для Docker-образу (локально можна просто python server.py)
+gunicorn>=21.2.0
+
 # dev
 pytest>=8.0.0

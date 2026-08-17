@@ -23,13 +23,53 @@ competitor_pipeline/
 └── requirements.txt
 ```
 
-## Встановлення
+## Запуск через Docker (рекомендовано)
+
+Один компоуз піднімає і панель, і Ollama з моделлю — нічого встановлювати вручну не треба:
+
+```bash
+cp .env.example .env       # необов'язково, працює і з дефолтами
+docker compose up -d
+```
+
+Панель: **http://localhost:5000**
+
+Перший запуск довгий: сервіс `ollama-init` стягує модель (gemma3:4b — близько 3 ГБ)
+і лише після цього стартує додаток. Прогрес завантаження:
+
+```bash
+docker compose logs -f ollama-init
+```
+
+Модель зберігається у volume `ollama-models`, тому наступні запуски миттєві.
+
+```bash
+docker compose logs -f app     # логи аналізу
+docker compose down            # зупинити (модель і звіти лишаються)
+docker compose down -v         # зупинити і видалити модель
+```
+
+Звіти пишуться у `./results` на хості, тож переживають перестворення контейнерів.
+
+### Налаштування compose
+
+Через `.env`: `APP_PORT` (порт панелі), `LLM_MODEL`, `LLM_TIMEOUT`, `LLM_NUM_CTX`.
+Щоб узяти більшу модель, достатньо `LLM_MODEL=gemma3:12b` у `.env` і `docker compose up -d` —
+`ollama-init` стягне її сам.
+
+### GPU
+
+За замовчуванням аналіз іде на CPU: 2-6 хвилин на конкурента. З відеокартою NVIDIA
+(потрібен `nvidia-container-toolkit`) розкоментуйте блок `deploy.resources` у сервісі
+`ollama` в `docker-compose.yml` — стане секунди.
+
+## Встановлення без Docker
 
 ```bash
 pip install -r requirements.txt
 ```
 
-## Запуск
+## Запуск без Docker
 
 1. Встановіть Ollama і завантажте модель ([ollama.com/download](https://ollama.com/download)):
 

@@ -1,0 +1,72 @@
+services:
+  # ── Локальна LLM ────────────────────────────────────────────────────────
+  ollama:
+    image: ollama/ollama:latest
+    container_name: competitor-ollama
+    restart: unless-stopped
+    volumes:
+      - ollama-models:/root/.ollama
+    ports:
+      # Лише для налагодження з хоста; додатку достатньо внутрішньої мережі.
+      # Прибрати рядок, щоб не світити Ollama назовні.
+      - "${OLLAMA_PORT:-11434}:11434"
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    # ── GPU (NVIDIA + nvidia-container-toolkit) ──────────────────────────
+    # Розкоментуйте, щоб аналіз йшов секунди замість хвилин:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+  # ── Одноразове завантаження моделі ──────────────────────────────────────
+  # Стягує модель у спільний volume і завершується. Якщо модель уже є,
+  # `ollama pull` миттєво виходить, тому наступні запуски не гальмують.
+  ollama-init:
+    image: ollama/ollama:latest
+    container_name: competitor-ollama-init
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    entrypoint: ["/bin/sh", "-c"]
+    command: >
+      "echo 'Завантажую модель ${LLM_MODEL:-gemma3:4b} (перший запуск — кілька ГБ)...' &&
+       ollama pull ${LLM_MODEL:-gemma3:4b} &&
+       echo 'Модель готова.'"
+    restart: "no"
+
+  # ── Веб-панель і pipeline ───────────────────────────────────────────────
+  app:
+    build: .
+    container_name: competitor-app
+    restart: unless-stopped
+    depends_on:
+      ollama:
+        condition: service_healthy
+      ollama-init:
+        condition: service_completed_successfully
+    environment:
+      OLLAMA_BASE_URL: http://ollama:11434
+      LLM_MODEL: ${LLM_MODEL:-gemma3:4b}
+      LLM_NUM_CTX: ${LLM_NUM_CTX:-8192}
+      # На CPU один крок аналізу може йти хвилини — тримаємо запас
+      LLM_TIMEOUT: ${LLM_TIMEOUT:-600}
+      LLM_TEMPERATURE: ${LLM_TEMPERATURE:-0.2}
+      LLM_RETRIES: ${LLM_RETRIES:-2}
+    ports:
+      - "${APP_PORT:-5000}:5000"
+    volumes:
+      # Звіти лишаються на хості між перезапусками
+      - ./results:/app/results
+
+volumes:
+  ollama-models:

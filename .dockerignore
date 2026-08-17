@@ -1,0 +1,14 @@
+.git
+.gitignore
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+tests/
+results/*.json
+pipeline.log
+*.md
+Dockerfile
+.dockerignore
+docker-compose.yml

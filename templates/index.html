@@ -385,7 +385,9 @@
 </div>
 
 <script>
-const API = "http://localhost:5000";
+// Порожній рядок — запити йдуть на той самий origin, що й панель.
+// Так працює і локальний запуск, і Docker з будь-яким APP_PORT.
+const API = "";
 const stageMap = {
   scraping_website: 0,
   scraping_socials: 1,
