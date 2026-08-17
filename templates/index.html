@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Competitor Intelligence Pipeline</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --bg2: #1a1d26;
+    --bg3: #22263a;
+    --surface: #1e2230;
+    --border: rgba(255,255,255,0.07);
+    --border2: rgba(255,255,255,0.12);
+    --text: #e8eaf0;
+    --text2: #8b90a0;
+    --text3: #555a6e;
+    --accent: #5b7cf6;
+    --accent2: #3d5bd4;
+    --green: #34d399;
+    --green-bg: rgba(52,211,153,0.1);
+    --red: #f87171;
+    --red-bg: rgba(248,113,113,0.1);
+    --amber: #fbbf24;
+    --amber-bg: rgba(251,191,36,0.1);
+    --purple: #a78bfa;
+    --purple-bg: rgba(167,139,250,0.1);
+    --radius: 10px;
+    --radius-sm: 6px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  /* ── Layout ── */
+  .app { display: flex; flex-direction: column; min-height: 100vh; }
+  .topbar {
+    display: flex; align-items: center; gap: 16px;
+    padding: 14px 24px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg);
+    position: sticky; top: 0; z-index: 100;
+  }
+  .logo { font-size: 15px; font-weight: 600; color: var(--text); letter-spacing: -0.3px; }
+  .logo span { color: var(--accent); }
+  .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+  .health-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--text3);
+  }
+  .health-dot.ok { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .health-dot.err { background: var(--red); }
+
+  .main { display: flex; flex: 1; overflow: hidden; }
+  .sidebar {
+    width: 240px; flex-shrink: 0;
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column;
+    height: calc(100vh - 49px); overflow-y: auto;
+  }
+  .content { flex: 1; overflow-y: auto; padding: 24px; }
+
+  /* ── Sidebar ── */
+  .sidebar-section { padding: 16px; border-bottom: 1px solid var(--border); }
+  .sidebar-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text3); margin-bottom: 10px; }
+  .nav-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 10px; border-radius: var(--radius-sm);
+    cursor: pointer; color: var(--text2); font-size: 13px;
+    transition: all 0.15s;
+  }
+  .nav-item:hover { background: var(--bg3); color: var(--text); }
+  .nav-item.active { background: rgba(91,124,246,0.15); color: var(--accent); }
+  .nav-icon { width: 16px; font-size: 14px; text-align: center; }
+  .saved-item {
+    padding: 8px 10px; border-radius: var(--radius-sm);
+    cursor: pointer; transition: background 0.15s;
+    border: 1px solid transparent;
+  }
+  .saved-item:hover { background: var(--bg3); }
+  .saved-item .company { font-size: 13px; font-weight: 500; margin-bottom: 2px; }
+  .saved-item .meta { font-size: 11px; color: var(--text3); }
+  .threat-dot {
+    display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 4px;
+  }
+
+  /* ── Input area ── */
+  .input-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+  .input-row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .input-group { flex: 1; min-width: 200px; }
+  .input-group label { display: block; font-size: 11px; color: var(--text3); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .input-group input {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border2);
+    border-radius: var(--radius-sm);
+    padding: 9px 12px;
+    color: var(--text);
+    font-size: 14px;
+    outline: none;
+    transition: border 0.15s;
+  }
+  .input-group input:focus { border-color: var(--accent); }
+  .input-group input::placeholder { color: var(--text3); }
+  .btn {
+    padding: 9px 20px;
+    border-radius: var(--radius-sm);
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.15s;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: var(--accent2); }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-ghost { background: transparent; color: var(--text2); border: 1px solid var(--border2); }
+  .btn-ghost:hover { background: var(--bg3); color: var(--text); }
+
+  /* ── Pipeline stages ── */
+  .stages { display: flex; gap: 0; margin-bottom: 20px; overflow-x: auto; }
+  .stage {
+    flex: 1; min-width: 90px;
+    padding: 10px 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-right: none;
+    position: relative;
+  }
+  .stage:first-child { border-radius: var(--radius) 0 0 var(--radius); }
+  .stage:last-child { border-right: 1px solid var(--border); border-radius: 0 var(--radius) var(--radius) 0; }
+  .stage-num { font-size: 10px; color: var(--text3); margin-bottom: 3px; }
+  .stage-name { font-size: 12px; font-weight: 500; color: var(--text2); }
+  .stage.active { background: rgba(91,124,246,0.12); border-color: rgba(91,124,246,0.3); }
+  .stage.active .stage-name { color: var(--accent); }
+  .stage.active .stage-num { color: rgba(91,124,246,0.7); }
+  .stage.done { background: rgba(52,211,153,0.08); border-color: rgba(52,211,153,0.25); }
+  .stage.done .stage-name { color: var(--green); }
+  .stage.done .stage-num { color: rgba(52,211,153,0.6); }
+
+  /* ── Log ── */
+  .log-card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+    font-size: 12px;
+    max-height: 160px;
+    overflow-y: auto;
+    margin-bottom: 20px;
+    line-height: 1.7;
+  }
+  .log-entry { display: flex; gap: 10px; }
+  .log-time { color: var(--text3); flex-shrink: 0; }
+  .log-stage { color: var(--text3); flex-shrink: 0; min-width: 80px; }
+  .log-msg { color: var(--text2); }
+  .log-entry.info .log-msg { color: var(--accent); }
+  .log-entry.success .log-msg { color: var(--green); }
+  .log-entry.warning .log-msg { color: var(--amber); }
+  .log-entry.error .log-msg { color: var(--red); }
+
+  /* ── Results ── */
+  .results-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .metric-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+  }
+  .metric-label { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+  .metric-value { font-size: 20px; font-weight: 600; color: var(--text); }
+  .metric-sub { font-size: 11px; color: var(--text3); margin-top: 3px; }
+
+  .section-title { font-size: 13px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; margin-top: 24px; }
+
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+  @media (max-width: 700px) { .two-col { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+  }
+  .card-title { font-size: 12px; font-weight: 600; color: var(--text2); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.4px; }
+
+  .badge {
+    display: inline-flex; align-items: center;
+    padding: 3px 9px; border-radius: 4px;
+    font-size: 11px; font-weight: 500; margin: 2px;
+  }
+  .badge-green { background: var(--green-bg); color: var(--green); }
+  .badge-red { background: var(--red-bg); color: var(--red); }
+  .badge-amber { background: var(--amber-bg); color: var(--amber); }
+  .badge-purple { background: var(--purple-bg); color: var(--purple); }
+  .badge-blue { background: rgba(91,124,246,0.12); color: var(--accent); }
+
+  .insight-row {
+    padding: 8px 12px;
+    border-left: 2px solid var(--accent);
+    margin-bottom: 8px;
+    background: rgba(91,124,246,0.05);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  }
+  .insight-row p { font-size: 13px; color: var(--text2); line-height: 1.5; }
+  .insight-row .itype { font-size: 10px; color: var(--accent); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 3px; }
+
+  .social-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 0; border-bottom: 1px solid var(--border);
+  }
+  .social-row:last-child { border-bottom: none; }
+  .social-platform { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+  .social-stat { font-size: 12px; color: var(--text3); }
+
+  .price-row {
+    display: flex; justify-content: space-between; align-items: baseline;
+    padding: 6px 0; border-bottom: 1px solid var(--border);
+    font-size: 13px;
+  }
+  .price-row:last-child { border-bottom: none; }
+  .price-val { font-weight: 600; color: var(--green); }
+  .price-ctx { color: var(--text3); font-size: 11px; max-width: 70%; text-align: right; }
+
+  .action-item {
+    display: flex; gap: 10px; padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .action-item:last-child { border-bottom: none; }
+  .priority-badge {
+    flex-shrink: 0; padding: 2px 8px; border-radius: 4px;
+    font-size: 10px; font-weight: 600; text-transform: uppercase; height: fit-content;
+  }
+  .priority-висока { background: var(--red-bg); color: var(--red); }
+  .priority-середня { background: var(--amber-bg); color: var(--amber); }
+  .priority-низька { background: var(--green-bg); color: var(--green); }
+  .action-text h4 { font-size: 13px; font-weight: 500; color: var(--text); margin-bottom: 2px; }
+  .action-text p { font-size: 12px; color: var(--text3); }
+
+  /* ── Comparison table ── */
+  .compare-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .compare-table th {
+    text-align: left; padding: 10px 12px;
+    border-bottom: 1px solid var(--border2);
+    color: var(--text3); font-weight: 500; font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .compare-table td {
+    padding: 10px 12px; border-bottom: 1px solid var(--border);
+    color: var(--text);
+  }
+  .compare-table tr:last-child td { border-bottom: none; }
+  .score-bar { display: flex; align-items: center; gap: 8px; }
+  .bar-bg { flex: 1; height: 4px; background: var(--bg3); border-radius: 2px; }
+  .bar-fill { height: 4px; background: var(--accent); border-radius: 2px; }
+
+  /* ── Empty / loading states ── */
+  .empty { text-align: center; padding: 60px 20px; color: var(--text3); }
+  .empty-icon { font-size: 40px; margin-bottom: 12px; opacity: 0.3; }
+  .empty p { font-size: 14px; }
+
+  .spinner {
+    display: inline-block; width: 14px; height: 14px;
+    border: 2px solid rgba(255,255,255,0.15);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--bg3); border-radius: 3px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- Topbar -->
+  <header class="topbar">
+    <div class="logo">Competitor <span>Intelligence</span></div>
+    <div class="topbar-right">
+      <div class="health-dot" id="healthDot"></div>
+      <span style="font-size:12px;color:var(--text3);" id="healthText">перевіряємо...</span>
+    </div>
+  </header>
+
+  <div class="main">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-section">
+        <div class="sidebar-label">Навігація</div>
+        <div class="nav-item active" onclick="showView('analyze')" id="nav-analyze">
+          <span class="nav-icon">⚡</span> Новий аналіз
+        </div>
+        <div class="nav-item" onclick="showView('history')" id="nav-history">
+          <span class="nav-icon">📋</span> Історія
+        </div>
+        <div class="nav-item" onclick="showView('compare')" id="nav-compare">
+          <span class="nav-icon">⚖️</span> Порівняння
+        </div>
+      </div>
+
+      <div class="sidebar-section" style="flex:1;">
+        <div class="sidebar-label">Збережені аналізи</div>
+        <div id="savedList">
+          <div style="font-size:12px;color:var(--text3);padding:4px 10px;">Завантаження...</div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Content -->
+    <main class="content">
+      <!-- VIEW: Analyze -->
+      <div id="view-analyze">
+        <div class="input-card">
+          <div class="input-row">
+            <div class="input-group">
+              <label>URL або назва конкурента</label>
+              <input type="text" id="urlInput" placeholder="напр.: lanet.ua або Ланет Мережі" />
+            </div>
+            <div style="display:flex;align-items:flex-end;">
+              <button class="btn btn-primary" id="runBtn" onclick="startAnalysis()">
+                <span id="btnIcon">▶</span> <span id="btnText">Аналізувати</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Stages -->
+        <div class="stages" id="stagesRow">
+          <div class="stage" id="st0"><div class="stage-num">01</div><div class="stage-name">Сайт</div></div>
+          <div class="stage" id="st1"><div class="stage-num">02</div><div class="stage-name">Соцмережі</div></div>
+          <div class="stage" id="st2"><div class="stage-num">03</div><div class="stage-name">Відгуки</div></div>
+          <div class="stage" id="st3"><div class="stage-num">04</div><div class="stage-name">AI аналіз</div></div>
+          <div class="stage" id="st4"><div class="stage-num">05</div><div class="stage-name">Збереження</div></div>
+        </div>
+
+        <!-- Log -->
+        <div class="log-card" id="logBox">
+          <div class="log-entry"><span class="log-time">—</span><span class="log-msg" style="color:var(--text3);">Введіть URL і натисніть «Аналізувати»</span></div>
+        </div>
+
+        <!-- Results -->
+        <div id="resultsArea">
+          <div class="empty">
+            <div class="empty-icon">🔍</div>
+            <p>Результати з'являться тут після аналізу</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- VIEW: History -->
+      <div id="view-history" style="display:none;">
+        <div class="section-title">Збережені аналізи</div>
+        <div id="historyList">
+          <div class="empty"><div class="empty-icon">📂</div><p>Ще немає збережених аналізів</p></div>
+        </div>
+      </div>
+
+      <!-- VIEW: Compare -->
+      <div id="view-compare" style="display:none;">
+        <div class="section-title">Порівняльна матриця конкурентів</div>
+        <div id="compareArea">
+          <div class="empty"><div class="empty-icon">⚖️</div><p>Виберіть аналізи в «Історії» для порівняння</p></div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script>
+const API = "http://localhost:5000";
+const stageMap = {
+  scraping_website: 0,
+  scraping_socials: 1,
+  scraping_reviews: 2,
+  ai_analysis: 3,
+  saving_results: 4,
+  done: 5,
+};
+
+let currentJob = null;
+let selectedForCompare = new Set();
+
+// ── Health check ─────────────────────────────────────────────
+async function checkHealth() {
+  try {
+    const r = await fetch(`${API}/api/health`);
+    const d = await r.json();
+    document.getElementById("healthDot").className = "health-dot " + (d.api_key_set ? "ok" : "err");
+    document.getElementById("healthText").textContent = d.api_key_set ? "API key OK" : "API key не встановлено";
+  } catch {
+    document.getElementById("healthDot").className = "health-dot err";
+    document.getElementById("healthText").textContent = "сервер недоступний";
+  }
+}
+
+// ── Navigation ────────────────────────────────────────────────
+function showView(name) {
+  ["analyze","history","compare"].forEach(v => {
+    document.getElementById(`view-${v}`).style.display = v === name ? "" : "none";
+    document.getElementById(`nav-${v}`).className = "nav-item" + (v === name ? " active" : "");
+  });
+  if (name === "history") loadHistory();
+}
+
+// ── Saved list (sidebar) ──────────────────────────────────────
+async function loadSavedList() {
+  try {
+    const r = await fetch(`${API}/api/results`);
+    const items = await r.json();
+    const container = document.getElementById("savedList");
+    if (!items.length) {
+      container.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:4px 10px;">Ще немає аналізів</div>';
+      return;
+    }
+    container.innerHTML = items.slice(0, 10).map(item => {
+      const color = threatColor(item.threat_level);
+      return `<div class="saved-item" onclick="loadAndShow('${item.filename}')">
+        <div class="company"><span class="threat-dot" style="background:${color}"></span>${item.company_name}</div>
+        <div class="meta">${item.threat_level || "?"} загроза · ${shortDate(item.finished_at)}</div>
+      </div>`;
+    }).join("");
+  } catch {}
+}
+
+function threatColor(level) {
+  return { "критичний": "#f87171", "високий": "#fbbf24", "середній": "#a78bfa", "низький": "#34d399" }[level] || "#555a6e";
+}
+
+function shortDate(iso) {
+  if (!iso) return "?";
+  const d = new Date(iso);
+  return d.toLocaleDateString("uk-UA", { day:"2-digit", month:"2-digit" });
+}
+
+// ── Start analysis ────────────────────────────────────────────
+async function startAnalysis() {
+  const url = document.getElementById("urlInput").value.trim();
+  if (!url) { document.getElementById("urlInput").style.borderColor = "var(--red)"; return; }
+  document.getElementById("urlInput").style.borderColor = "";
+
+  document.getElementById("runBtn").disabled = true;
+  document.getElementById("btnIcon").innerHTML = '<span class="spinner"></span>';
+  document.getElementById("btnText").textContent = "Аналізується...";
+  document.getElementById("resultsArea").innerHTML = "";
+  clearLog();
+  resetStages();
+
+  try {
+    const r = await fetch(`${API}/api/analyze`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url })
+    });
+    const d = await r.json();
+    if (d.error) { alert(d.error); return; }
+    currentJob = d.job_id;
+    connectStream(d.job_id);
+  } catch (e) {
+    appendLog("error", "server", `Помилка: ${e.message}`, "error");
+    resetBtn();
+  }
+}
+
+function connectStream(jobId) {
+  const es = new EventSource(`${API}/api/stream/${jobId}`);
+  es.onmessage = (e) => {
+    const event = JSON.parse(e.data);
+    if (event.type === "progress" || event.type === "done") {
+      handleStatus(event.data);
+    }
+    if (event.type === "done") {
+      es.close();
+      resetBtn();
+      loadSavedList();
+    }
+    if (event.type === "error") {
+      appendLog("error", "system", event.data.message, "error");
+      es.close();
+      resetBtn();
+    }
+  };
+  es.onerror = () => {
+    appendLog("error", "stream", "З'єднання перервано", "error");
+    es.close();
+    resetBtn();
+  };
+}
+
+function handleStatus(status) {
+  // Update stages
+  const idx = stageMap[status.current_stage] ?? -1;
+  const completed = (status.stages_completed || []).map(s => stageMap[s] ?? -1);
+  for (let i = 0; i < 5; i++) {
+    const el = document.getElementById(`st${i}`);
+    el.className = "stage" + (completed.includes(i) ? " done" : i === idx ? " active" : "");
+  }
+
+  // Sync log
+  const entries = status.stages_log || [];
+  const logBox = document.getElementById("logBox");
+  logBox.innerHTML = entries.map(e =>
+    `<div class="log-entry ${e.level}">
+      <span class="log-time">${e.time}</span>
+      <span class="log-stage">${e.stage}</span>
+      <span class="log-msg">${e.message}</span>
+    </div>`
+  ).join("");
+  logBox.scrollTop = logBox.scrollHeight;
+
+  // Render results when done
+  if (status.current_stage === "done" && status.result?.analysis) {
+    renderAnalysis(status.result.analysis, status.result.scrape, status.result.social);
+  }
+}
+
+// ── Results rendering ─────────────────────────────────────────
+function renderAnalysis(a, scrape, social) {
+  const prices = scrape?.prices || [];
+  const threatC = threatColor(a.threat_level);
+
+  let html = `
+    <div class="results-grid">
+      ${metricCard("Компанія", a.company_name || "?", a.segment)}
+      ${metricCard("Ціновий рівень", a.pricing?.tier || "?", priceRange(a.pricing))}
+      ${metricCard("Рівень загрози", a.threat_level || "?", "", threatC)}
+      ${metricCard("Репутація", a.reputation?.sentiment || "?", `Довіра: ${a.reputation?.trust_score || "?"}/10`)}
+      ${metricCard("Позиція", a.market_position || "?", "")}
+      ${metricCard("Веб-сайт", `${a.website_quality?.score || "?"}/10`, a.website_quality?.cta_strength ? `CTA: ${a.website_quality.cta_strength}` : "")}
+    </div>
+
+    <div class="section-title">Сильні та слабкі сторони</div>
+    <div class="two-col">
+      <div class="card">
+        <div class="card-title">✅ Сильні сторони</div>
+        ${(a.strengths || []).map(s => `<div class="badge badge-green" style="display:block;margin-bottom:6px;padding:6px 10px;">${s}</div>`).join("")}
+      </div>
+      <div class="card">
+        <div class="card-title">⚠️ Слабкі сторони</div>
+        ${(a.weaknesses || []).map(w => `<div class="badge badge-red" style="display:block;margin-bottom:6px;padding:6px 10px;">${w}</div>`).join("")}
+      </div>
+    </div>`;
+
+  // Prices
+  if (prices.length) {
+    html += `<div class="section-title">Знайдені ціни</div>
+    <div class="card">
+      ${prices.slice(0, 8).map(p =>
+        `<div class="price-row"><span class="price-val">${p.value} грн</span><span class="price-ctx">${p.context}</span></div>`
+      ).join("")}
+    </div>`;
+  }
+
+  // Social
+  if (social && Object.keys(social).length) {
+    html += `<div class="section-title">Соцмережі</div>
+    <div class="card">
+      ${Object.entries(social).map(([platform, data]) => {
+        const followers = data.followers ? formatNum(data.followers) + " підписників" : "підписники невідомі";
+        return `<div class="social-row">
+          <div class="social-platform">
+            <span>${platformIcon(platform)}</span>
+            <span style="text-transform:capitalize;">${platform}</span>
+            ${data.error ? '<span class="badge badge-red">недоступно</span>' : ''}
+          </div>
+          <span class="social-stat">${data.error ? "" : followers}</span>
+        </div>`;
+      }).join("")}
+    </div>`;
+  }
+
+  // Reputation
+  if (a.reputation) {
+    html += `<div class="section-title">Репутація</div>
+    <div class="two-col">
+      <div class="card">
+        <div class="card-title">👍 Хвалять за</div>
+        ${(a.reputation.main_praises || []).map(p => `<div class="insight-row"><p>${p}</p></div>`).join("") || "<p style='color:var(--text3);font-size:13px;'>Немає даних</p>"}
+      </div>
+      <div class="card">
+        <div class="card-title">👎 Скаржаться на</div>
+        ${(a.reputation.main_complaints || []).map(c => `<div class="insight-row" style="border-color:var(--red);background:var(--red-bg);"><p>${c}</p></div>`).join("") || "<p style='color:var(--text3);font-size:13px;'>Немає даних</p>"}
+      </div>
+    </div>`;
+  }
+
+  // Key differentiator
+  if (a.key_differentiator) {
+    html += `<div class="section-title">Ключовий диференціатор</div>
+    <div class="insight-row" style="border-color:var(--purple);background:var(--purple-bg);">
+      <div class="itype" style="color:var(--purple);">позиціонування</div>
+      <p>${a.key_differentiator}</p>
+    </div>`;
+  }
+
+  // Opportunities
+  if (a.opportunities_for_us?.length) {
+    html += `<div class="section-title">Наші можливості</div>`;
+    a.opportunities_for_us.forEach(o => {
+      html += `<div class="insight-row"><div class="itype">можливість</div><p>${o}</p></div>`;
+    });
+  }
+
+  // Actions
+  if (a.recommended_actions?.length) {
+    html += `<div class="section-title">Рекомендовані дії</div>
+    <div class="card">
+      ${a.recommended_actions.map(action =>
+        `<div class="action-item">
+          <span class="priority-badge priority-${action.priority}">${action.priority}</span>
+          <div class="action-text">
+            <h4>${action.action}</h4>
+            <p>${action.rationale}</p>
+          </div>
+        </div>`
+      ).join("")}
+    </div>`;
+  }
+
+  // Summary
+  if (a.summary) {
+    html += `<div class="section-title">Стратегічний висновок</div>
+    <div class="insight-row">
+      <div class="itype">резюме для менеджменту</div>
+      <p>${a.summary}</p>
+    </div>`;
+  }
+
+  html += `<div style="margin-top:24px;padding-top:16px;border-top:1px solid var(--border);color:var(--text3);font-size:12px;">
+    Аналіз виконано · ${new Date().toLocaleString("uk-UA")}
+  </div>`;
+
+  document.getElementById("resultsArea").innerHTML = html;
+}
+
+function metricCard(label, value, sub, color) {
+  const valStyle = color ? `style="color:${color}"` : "";
+  return `<div class="metric-card">
+    <div class="metric-label">${label}</div>
+    <div class="metric-value" ${valStyle}>${value}</div>
+    ${sub ? `<div class="metric-sub">${sub}</div>` : ""}
+  </div>`;
+}
+
+function priceRange(pricing) {
+  if (!pricing) return "";
+  if (pricing.min_price_uah && pricing.max_price_uah)
+    return `${pricing.min_price_uah}–${pricing.max_price_uah} грн`;
+  if (pricing.avg_price_uah)
+    return `~${pricing.avg_price_uah} грн/міс`;
+  return "";
+}
+
+function platformIcon(p) {
+  return { facebook:"📘", instagram:"📷", telegram:"✈️", youtube:"▶️", linkedin:"💼" }[p] || "🌐";
+}
+
+function formatNum(n) {
+  if (n >= 1000000) return (n/1000000).toFixed(1) + "M";
+  if (n >= 1000) return (n/1000).toFixed(1) + "K";
+  return n.toString();
+}
+
+// ── History view ──────────────────────────────────────────────
+async function loadHistory() {
+  try {
+    const r = await fetch(`${API}/api/results`);
+    const items = await r.json();
+    const container = document.getElementById("historyList");
+    if (!items.length) {
+      container.innerHTML = '<div class="empty"><div class="empty-icon">📂</div><p>Ще немає збережених аналізів</p></div>';
+      return;
+    }
+    container.innerHTML = items.map(item => {
+      const selected = selectedForCompare.has(item.filename);
+      return `<div class="card" style="margin-bottom:10px;cursor:pointer;" onclick="toggleCompare('${item.filename}', this)">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+          <div>
+            <div style="font-weight:600;font-size:15px;margin-bottom:4px;">${item.company_name}</div>
+            <div style="font-size:12px;color:var(--text3);">${item.url} · ${shortDate(item.finished_at)}</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            ${item.threat_level ? `<span class="badge" style="background:${threatColor(item.threat_level)}22;color:${threatColor(item.threat_level)};">${item.threat_level}</span>` : ""}
+            <input type="checkbox" ${selected ? "checked" : ""} onclick="event.stopPropagation();toggleCompare('${item.filename}', this.closest('.card'))" style="accent-color:var(--accent);">
+          </div>
+        </div>
+        ${item.summary ? `<div style="margin-top:10px;font-size:13px;color:var(--text3);line-height:1.5;">${item.summary}</div>` : ""}
+        <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
+          ${item.pricing?.tier ? `<span class="badge badge-blue">${item.pricing.tier}</span>` : ""}
+          ${priceRange(item.pricing) ? `<span class="badge badge-green">${priceRange(item.pricing)}</span>` : ""}
+        </div>
+      </div>`;
+    }).join("");
+  } catch(e) {
+    document.getElementById("historyList").innerHTML = `<div style="color:var(--red);">Помилка: ${e.message}</div>`;
+  }
+}
+
+function toggleCompare(filename, card) {
+  if (selectedForCompare.has(filename)) {
+    selectedForCompare.delete(filename);
+    card.style.outline = "";
+  } else {
+    selectedForCompare.add(filename);
+    card.style.outline = "1px solid var(--accent)";
+  }
+  updateCompareBtn();
+}
+
+function updateCompareBtn() {
+  const n = selectedForCompare.size;
+  const area = document.getElementById("compareArea");
+  if (n >= 2) {
+    area.innerHTML = `<div style="margin-bottom:16px;">
+      <button class="btn btn-primary" onclick="runComparison()">
+        ⚖️ Порівняти ${n} конкурентів
+      </button>
+    </div>`;
+  }
+}
+
+async function runComparison() {
+  const area = document.getElementById("compareArea");
+  area.innerHTML = `<div style="display:flex;gap:10px;align-items:center;color:var(--text2);">
+    <span class="spinner"></span> Генеруємо матрицю через AI...
+  </div>`;
+
+  try {
+    const r = await fetch(`${API}/api/compare`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ filenames: Array.from(selectedForCompare) })
+    });
+    const d = await r.json();
+    if (d.error) { area.innerHTML = `<div style="color:var(--red);">${d.error}</div>`; return; }
+    renderMatrix(d, area);
+  } catch(e) {
+    area.innerHTML = `<div style="color:var(--red);">Помилка: ${e.message}</div>`;
+  }
+}
+
+function renderMatrix(d, area) {
+  const matrix = d.matrix || [];
+  const dims = ["price_score","web_score","social_score","reputation_score","threat_score","overall_score"];
+  const labels = ["Ціни","Сайт","Соцмережі","Репутація","Загроза","Загальний"];
+
+  let html = `<div class="section-title">Порівняльна матриця</div>
+  <div class="card" style="overflow-x:auto;">
+    <table class="compare-table">
+      <thead><tr>
+        <th>Компанія</th>
+        ${labels.map(l => `<th>${l}</th>`).join("")}
+      </tr></thead>
+      <tbody>
+        ${matrix.map(row => `<tr>
+          <td style="font-weight:500;">${row.company}</td>
+          ${dims.map(dim => {
+            const val = row[dim] || 0;
+            return `<td><div class="score-bar">
+              <div class="bar-bg"><div class="bar-fill" style="width:${val*10}%;"></div></div>
+              <span style="font-size:12px;min-width:20px;">${val}</span>
+            </div></td>`;
+          }).join("")}
+        </tr>`).join("")}
+      </tbody>
+    </table>
+  </div>`;
+
+  if (d.market_leader || d.biggest_threat) {
+    html += `<div class="two-col" style="margin-top:16px;">
+      ${d.market_leader ? `<div class="insight-row" style="border-color:var(--green);background:var(--green-bg);">
+        <div class="itype" style="color:var(--green);">лідер ринку</div><p>${d.market_leader}</p></div>` : ""}
+      ${d.biggest_threat ? `<div class="insight-row" style="border-color:var(--red);background:var(--red-bg);">
+        <div class="itype" style="color:var(--red);">найбільша загроза</div><p>${d.biggest_threat}</p></div>` : ""}
+    </div>`;
+  }
+
+  if (d.market_gaps?.length) {
+    html += `<div class="section-title">Незайняті ніші</div>`;
+    d.market_gaps.forEach(gap => {
+      html += `<div class="insight-row"><p>${gap}</p></div>`;
+    });
+  }
+
+  if (d.strategic_summary) {
+    html += `<div class="section-title">Стратегічний висновок</div>
+    <div class="insight-row"><p>${d.strategic_summary}</p></div>`;
+  }
+
+  area.innerHTML = html;
+  showView("compare");
+}
+
+async function loadAndShow(filename) {
+  showView("analyze");
+  try {
+    const r = await fetch(`${API}/api/results/${filename}`);
+    const d = await r.json();
+    const analysis = d.result?.analysis;
+    if (analysis) {
+      clearLog();
+      resetStages();
+      for (let i = 0; i < 5; i++) document.getElementById(`st${i}`).className = "stage done";
+      renderAnalysis(analysis, d.result?.scrape, d.result?.social);
+    }
+  } catch(e) {
+    console.error(e);
+  }
+}
+
+// ── Helpers ───────────────────────────────────────────────────
+function clearLog() {
+  document.getElementById("logBox").innerHTML = "";
+}
+
+function appendLog(level, stage, msg) {
+  const lb = document.getElementById("logBox");
+  const now = new Date().toLocaleTimeString("uk-UA", {hour:"2-digit",minute:"2-digit",second:"2-digit"});
+  lb.innerHTML += `<div class="log-entry ${level}">
+    <span class="log-time">${now}</span>
+    <span class="log-stage">${stage}</span>
+    <span class="log-msg">${msg}</span>
+  </div>`;
+  lb.scrollTop = lb.scrollHeight;
+}
+
+function resetStages() {
+  for (let i = 0; i < 5; i++) document.getElementById(`st${i}`).className = "stage";
+}
+
+function resetBtn() {
+  document.getElementById("runBtn").disabled = false;
+  document.getElementById("btnIcon").textContent = "▶";
+  document.getElementById("btnText").textContent = "Аналізувати";
+}
+
+// ── Init ──────────────────────────────────────────────────────
+checkHealth();
+loadSavedList();
+setInterval(checkHealth, 30000);
+</script>
+</body>
+</html>
